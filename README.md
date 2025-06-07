@@ -1,6 +1,6 @@
 # ghost-racing
 
-Uma aplicação Android para o desenvolvimento pessoal em corridas.
+Uma aplicação Android feita em Flutter para o desenvolvimento pessoal em corridas. .
 
 ## Getting Started
 
