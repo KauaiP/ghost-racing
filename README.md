@@ -1,6 +1,6 @@
-# myapp
+# ghost-racing
 
-A new Flutter project.
+Uma aplicação Android para o desenvolvimento pessoal em corridas.
 
 ## Getting Started
 
