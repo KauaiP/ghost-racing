@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "380478630695",
+    "project_id": "ghoststride-49722",
+    "storage_bucket": "ghoststride-49722.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:380478630695:android:1735493c6221954fbb5702",
+        "android_client_info": {
+          "package_name": "com.ghoststride.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmXwffkziVoCOQ1JW49aAyyBqmelfyqm4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
