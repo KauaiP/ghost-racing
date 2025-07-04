@@ -1,18 +1,50 @@
 import 'package:flutter/material.dart';
+import '../services/user_service.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String _userName = 'Visitante';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserName();
+  }
+
+  Future<void> _loadUserName() async {
+    final name = await UserService().getUserName();
+    setState(() {
+      _userName = name?.isNotEmpty == true ? name! : 'Visitante';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: const Color(0xFFB3CDD1), // Fundo azul
+        backgroundColor: const Color(0xFFB3CDD1),
         appBar: AppBar(
           automaticallyImplyLeading: false,
           backgroundColor: const Color(0xFF87AFC9),
           elevation: 0,
+          title: Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(
+              'Bem-vindo, $_userName!',
+              style: const TextStyle(
+                color: Color(0xFF702C50),
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+          ),
           bottom: const TabBar(
             indicatorColor: Colors.white,
             labelColor: Colors.black,
@@ -35,8 +67,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
-
-// ------------ ABA: Nova Corrida ------------
 
 class NovaCorridaScreen extends StatelessWidget {
   const NovaCorridaScreen({super.key});
@@ -106,8 +136,6 @@ class Dica extends StatelessWidget {
     );
   }
 }
-
-// ------------ ABAS VAZIAS ------------
 
 class HistoricoScreen extends StatelessWidget {
   const HistoricoScreen({super.key});
