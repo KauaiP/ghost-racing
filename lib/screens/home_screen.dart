@@ -1,65 +1,128 @@
 import 'package:flutter/material.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 1; // Começa na aba 'Nova Corrida'
-
-  static final List<Widget> _screens = [
-    const PlaceholderScreen(color: Colors.blue, title: 'Histórico'),
-    const NovaCorridaScreen(),
-    const PlaceholderScreen(color: Colors.blue, title: 'Desempenho'),
-  ];
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('GhostStride')),
-      body: _screens[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        selectedItemColor: Colors.deepPurple,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Histórico'),
-          BottomNavigationBarItem(icon: Icon(Icons.directions_run), label: 'Nova Corrida'),
-          BottomNavigationBarItem(icon: Icon(Icons.insights), label: 'Desempenho'),
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFB3CDD1), // Fundo azul
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          backgroundColor: const Color(0xFF87AFC9),
+          elevation: 0,
+          bottom: const TabBar(
+            indicatorColor: Colors.white,
+            labelColor: Colors.black,
+            unselectedLabelColor: Colors.black54,
+            tabs: [
+              Tab(text: 'Histórico'),
+              Tab(text: 'Nova Corrida'),
+              Tab(text: 'Desempenho'),
+            ],
+          ),
+        ),
+        body: const TabBarView(
+          children: [
+            HistoricoScreen(),
+            NovaCorridaScreen(),
+            DesempenhoScreen(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ------------ ABA: Nova Corrida ------------
+
+class NovaCorridaScreen extends StatelessWidget {
+  const NovaCorridaScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFB3CDD1),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          const SizedBox(height: 40),
+          Image.asset(
+            'lib/assets/ghost_home.png',
+            height: 100,
+          ),
+          const SizedBox(height: 30),
+          ElevatedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.directions_run),
+            label: const Text('Iniciar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF85324C),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              elevation: 4,
+            ),
+          ),
+          const SizedBox(height: 30),
+          const Dica(text: 'Não esqueça de se alongar!'),
+          const Dica(text: 'Esteja hidratado!'),
+          const Dica(text: 'Escolha uma rota segura!'),
+          const Dica(text: 'Use tênis adequado e confortável!'),
         ],
       ),
     );
   }
 }
 
-class NovaCorridaScreen extends StatelessWidget {
-  const NovaCorridaScreen({Key? key}) : super(key: key);
+class Dica extends StatelessWidget {
+  final String text;
+  const Dica({required this.text, super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Nova Corrida', style: TextStyle(fontSize: 24)),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.check, size: 20, color: Color(0xFF85324C)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF85324C),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class PlaceholderScreen extends StatelessWidget {
-  final Color color;
-  final String title;
+// ------------ ABAS VAZIAS ------------
 
-  const PlaceholderScreen({Key? key, required this.color, required this.title}) : super(key: key);
+class HistoricoScreen extends StatelessWidget {
+  const HistoricoScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Container(color: color, child: Center(child: Text(title, style: const TextStyle(fontSize: 24, color: Colors.white))));
+    return Container(color: const Color(0xFFB3CDD1));
+  }
+}
+
+class DesempenhoScreen extends StatelessWidget {
+  const DesempenhoScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(color: const Color(0xFFB3CDD1));
   }
 }
