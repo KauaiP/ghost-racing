@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/login_screen.dart';
+import 'screens/historico_screen.dart'; // Import HistoricoScreen
 
 void main() {
   runApp(const GhostStrideApp());
@@ -17,6 +18,9 @@ class GhostStrideApp extends StatelessWidget {
         primarySwatch: Colors.blue,
       ),
       home: const LoginScreen(),
+      routes: {
+        '/historico': (context) => const HistoricoScreen(),
+      },
     );
   }
 }
