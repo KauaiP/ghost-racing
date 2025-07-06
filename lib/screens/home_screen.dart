@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/user_service.dart';
+import './map_screen.dart'; // Corrigido com ponto e vírgula
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -86,7 +87,12 @@ class NovaCorridaScreen extends StatelessWidget {
           ),
           const SizedBox(height: 30),
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MapScreen()),
+              );
+            },
             icon: const Icon(Icons.directions_run),
             label: const Text('Iniciar'),
             style: ElevatedButton.styleFrom(
