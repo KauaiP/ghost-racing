@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/user_service.dart';
-import './map_screen.dart'; // Corrigido com ponto e vírgula
+import '../services/ghost_storage_service.dart';
+import './map_screen.dart';
+import './ghost_selection_screen.dart'; // Nova tela que você criará
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -72,6 +74,23 @@ class _HomeScreenState extends State<HomeScreen> {
 class NovaCorridaScreen extends StatelessWidget {
   const NovaCorridaScreen({super.key});
 
+  Future<void> _handleStart(BuildContext context) async {
+    final ghosts = await GhostStorageService().getAllGhosts();
+    if (ghosts.isEmpty) {
+      // Nenhum fantasma, começa corrida normal
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MapScreen()),
+      );
+    } else {
+      // Existem fantasmas, ir para a seleção
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const GhostSelectionScreen()),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -87,12 +106,7 @@ class NovaCorridaScreen extends StatelessWidget {
           ),
           const SizedBox(height: 30),
           ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MapScreen()),
-              );
-            },
+            onPressed: () => _handleStart(context),
             icon: const Icon(Icons.directions_run),
             label: const Text('Iniciar'),
             style: ElevatedButton.styleFrom(
