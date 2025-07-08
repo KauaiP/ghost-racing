@@ -5,8 +5,8 @@ import 'package:geolocator/geolocator.dart';
 import '../models/ghost_data.dart';
 import '../services/ghost_storage_service.dart';
 import '../services/mqtt_service.dart';
+import 'dart:convert';
 
-// Enum to represent the race state
 enum RaceState { running, paused, stopped }
 
 class MapScreen extends StatefulWidget {
@@ -32,6 +32,8 @@ class _MapScreenState extends State<MapScreen> {
   MQTTService? _mqtt;
   String mqttTopic = "ghoststride/demo";
 
+  LatLng? ghostPosition;
+
   @override
   void initState() {
     super.initState();
@@ -53,13 +55,49 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _elapsedTime = DateTime.now().difference(_startTime!);
         });
+        _updateGhostPosition();
       }
     });
   }
 
+  void _updateGhostPosition() {
+    if (widget.ghost == null || _route.length < 2) return;
+
+    final double ghostSpeed = widget.ghost!.distance / widget.ghost!.elapsedSeconds;
+    final double ghostDistance = ghostSpeed * _elapsedTime.inSeconds;
+
+    double accumulated = 0.0;
+    for (int i = 0; i < _route.length - 1; i++) {
+      final double segment = Geolocator.distanceBetween(
+        _route[i].latitude,
+        _route[i].longitude,
+        _route[i + 1].latitude,
+        _route[i + 1].longitude,
+      );
+
+      if (accumulated + segment >= ghostDistance) {
+        final double ratio = (ghostDistance - accumulated) / segment;
+        final double lat = _route[i].latitude +
+            ( _route[i + 1].latitude - _route[i].latitude ) * ratio;
+        final double lng = _route[i].longitude +
+            ( _route[i + 1].longitude - _route[i].longitude ) * ratio;
+
+        setState(() {
+          ghostPosition = LatLng(lat, lng);
+        });
+        break;
+      }
+
+      accumulated += segment;
+    }
+  }
+
   void _handleIncomingMessage(String payload) {
-    // Exemplo: mostrar mensagem do fantasma no console
-    print("Recebido do MQTT: $payload");
+  final data = jsonDecode(payload); // ← transforma o JSON de volta em Map
+  final ghostDistance = double.tryParse(data['distance']);
+  final ghostTime = int.tryParse(data['time'].toString());
+
+  print('Fantasma percorreu $ghostDistance metros em $ghostTime segundos');
   }
 
   void _stopRace() async {
@@ -160,12 +198,11 @@ class _MapScreenState extends State<MapScreen> {
 
       _mapController?.animateCamera(CameraUpdate.newLatLng(newPoint));
 
-      // Publica atualização via MQTT
       final ghostData = {
         'distance': _totalDistance.toStringAsFixed(2),
         'time': _elapsedTime.inSeconds,
       };
-      _mqtt?.publish(ghostData.toString());
+      _mqtt?.publish(jsonEncode(ghostData));
     });
   }
 
@@ -173,13 +210,9 @@ class _MapScreenState extends State<MapScreen> {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return false;
-      }
+      if (permission == LocationPermission.denied) return false;
     }
-    if (permission == LocationPermission.deniedForever) {
-      return false;
-    }
+    if (permission == LocationPermission.deniedForever) return false;
     return true;
   }
 
@@ -198,140 +231,138 @@ class _MapScreenState extends State<MapScreen> {
         title: const Text('Corrida'),
         backgroundColor: const Color(0xFF702C50),
       ),
-      body:
-          _currentPosition == null
-              ? const Center(child: CircularProgressIndicator())
-              : Stack(
-                children: [
-                  GoogleMap(
-                    onMapCreated: (controller) => _mapController = controller,
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(
-                        _currentPosition!.latitude,
-                        _currentPosition!.longitude,
-                      ),
-                      zoom: 16,
+      body: _currentPosition == null
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
+              children: [
+                GoogleMap(
+                  onMapCreated: (controller) => _mapController = controller,
+                  initialCameraPosition: CameraPosition(
+                    target: LatLng(
+                      _currentPosition!.latitude,
+                      _currentPosition!.longitude,
                     ),
-                    polylines: {
-                      Polyline(
-                        polylineId: const PolylineId("route"),
-                        points: _route,
-                        color: Colors.purple,
-                        width: 6,
-                      ),
-                    },
-                    markers: {
+                    zoom: 16,
+                  ),
+                  polylines: {
+                    Polyline(
+                      polylineId: const PolylineId("route"),
+                      points: _route,
+                      color: Colors.purple,
+                      width: 6,
+                    ),
+                  },
+                  markers: {
+                    Marker(
+                      markerId: const MarkerId('start'),
+                      position: _route.first,
+                      infoWindow: const InfoWindow(title: 'Início'),
+                    ),
+                    if (_route.length > 1)
                       Marker(
-                        markerId: const MarkerId('start'),
-                        position: _route.first,
-                        infoWindow: const InfoWindow(title: 'Início'),
+                        markerId: const MarkerId('current'),
+                        position: _route.last,
+                        infoWindow: const InfoWindow(title: 'Você'),
+                        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
                       ),
-                      if (_route.length > 1)
-                        Marker(
-                          markerId: const MarkerId('current'),
-                          position: _route.last,
-                          infoWindow: const InfoWindow(title: 'Agora'),
+                    if (ghostPosition != null)
+                      Marker(
+                        markerId: const MarkerId('ghost'),
+                        position: ghostPosition!,
+                        infoWindow: const InfoWindow(title: 'Fantasma'),
+                        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+                      ),
+                  },
+                ),
+                Positioned(
+                  bottom: 20,
+                  left: 20,
+                  right: 20,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Distância total:',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
-                    },
-                  ),
-                  Positioned(
-                    bottom: 20,
-                    left: 20,
-                    right: 20,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Distância total:',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        Text(
+                          '${_totalDistance.toStringAsFixed(2)} metros',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            color: Color(0xFF702C50),
+                            fontWeight: FontWeight.bold,
                           ),
-                          Text(
-                            '${_totalDistance.toStringAsFixed(2)} metros',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              color: Color(0xFF702C50),
-                              fontWeight: FontWeight.bold,
-                            ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Tempo total:',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          '${_elapsedTime.inMinutes.toString().padLeft(2, '0')}:${(_elapsedTime.inSeconds % 60).toString().padLeft(2, '0')}',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            color: Color(0xFF702C50),
+                            fontWeight: FontWeight.bold,
                           ),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'Tempo total:',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Pace:',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          _totalDistance > 0 && _elapsedTime.inSeconds > 0
+                              ? '${((_elapsedTime.inSeconds / 60) / (_totalDistance / 1000)).toStringAsFixed(2)} min/km'
+                              : 'N/A',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            color: Color(0xFF702C50),
+                            fontWeight: FontWeight.bold,
                           ),
-                          Text(
-                            '${_elapsedTime.inMinutes.toString().padLeft(2, '0')}:${(_elapsedTime.inSeconds % 60).toString().padLeft(2, '0')}',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              color: Color(0xFF702C50),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'Pace:',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            _totalDistance > 0 && _elapsedTime.inSeconds > 0
-                                ? '${((_elapsedTime.inSeconds / 60) / (_totalDistance / 1000)).toStringAsFixed(2)} min/km'
-                                : 'N/A',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              color: Color(0xFF702C50),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              if (_raceState == RaceState.running)
-                                ElevatedButton(
-                                  onPressed: _pauseRace,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orange,
-                                  ),
-                                  child: const Text('Pausar'),
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            if (_raceState == RaceState.running)
+                              ElevatedButton(
+                                onPressed: _pauseRace,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
                                 ),
-                              if (_raceState == RaceState.paused)
-                                ElevatedButton(
-                                  onPressed: _resumeRace,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                  ),
-                                  child: const Text('Retomar'),
+                                child: const Text('Pausar'),
+                              ),
+                            if (_raceState == RaceState.paused)
+                              ElevatedButton(
+                                onPressed: _resumeRace,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
                                 ),
-                              if (_raceState != RaceState.stopped)
-                                ElevatedButton(
-                                  onPressed: _stopRace,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                  ),
-                                  child: const Text('Encerrar'),
+                                child: const Text('Retomar'),
+                              ),
+                            if (_raceState != RaceState.stopped)
+                              ElevatedButton(
+                                onPressed: _stopRace,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
                                 ),
-                            ],
-                          ),
-                        ],
-                      ),
+                                child: const Text('Encerrar'),
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
     );
   }
 }
