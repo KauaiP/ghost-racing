@@ -1,0 +1,14 @@
+* [33m5bddb8b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mintegraçãoAPI[m[33m)[m mudando paradigma de iniciar uma nova corrida
+* [33m74d042c[m modificando ícones do mapa de corrida
+* [33m7713c5e[m mostrando ícone do fantasma no mapa
+* [33m4448566[m[33m ([m[1;31morigin/integraçãoAPI[m[33m)[m implementação mqtt
+* [33m945ffcd[m criando armazenamento de corridas, modificando lógica de iniciar uma corrida
+* [33m1d42319[m feat: Lógica de dados da corrida, assim como possibilidade de parar
+* [33m601e406[m feat: integração da API do google ao iniciar uma corrida
+* [33m021db3c[m[33m ([m[1;31morigin/main[m[33m, [m[1;32mmain[m[33m)[m sistema de autenticacao de usuário
+* [33m9807018[m Correcão do arquivo widget_test
+* [33m8bf8083[m Personalizando telas
+* [33m97d6072[m desfazendo sistema de autenticação para correção e add telas do app
+* [33ma8b7ff7[m[33m ([m[1;31mupstream/main[m[33m, [m[1;31mupstream/HEAD[m[33m)[m Update README.md
+* [33mf45cd9a[m Update README.md
+* [33m64f2e49[m Upando os arquivos

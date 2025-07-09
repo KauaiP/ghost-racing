@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/ghost_data.dart';
 import '../services/ghost_storage_service.dart';
+import '../models/ghost_data.dart';
 import 'map_screen.dart';
 
 class GhostSelectionScreen extends StatefulWidget {
@@ -11,7 +11,7 @@ class GhostSelectionScreen extends StatefulWidget {
 }
 
 class _GhostSelectionScreenState extends State<GhostSelectionScreen> {
-  List<GhostData> _ghosts = [];
+  List<GhostData> ghosts = [];
 
   @override
   void initState() {
@@ -20,10 +20,32 @@ class _GhostSelectionScreenState extends State<GhostSelectionScreen> {
   }
 
   Future<void> _loadGhosts() async {
-    final ghosts = await GhostStorageService().getAllGhosts();
-    setState(() {
-      _ghosts = ghosts;
-    });
+    ghosts = await GhostStorageService().getAllGhosts();
+    setState(() {});
+  }
+
+  void _startRaceWithGhost(GhostData ghost) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapScreen(ghost: ghost),
+      ),
+    );
+  }
+
+  void _startRaceWithoutGhost() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const MapScreen(),
+      ),
+    );
+  }
+
+  Future<void> _deleteGhost(int index) async {
+    final service = GhostStorageService();
+    await service.deleteGhostAt(index); // Você precisa implementar isso
+    await _loadGhosts(); // Atualiza a tela
   }
 
   @override
@@ -34,57 +56,39 @@ class _GhostSelectionScreenState extends State<GhostSelectionScreen> {
         title: const Text('Escolha um Fantasma'),
         backgroundColor: const Color(0xFF702C50),
       ),
-      body: _ghosts.isEmpty
-          ? const Center(
-              child: Text(
-                'Nenhum fantasma disponível.',
-                style: TextStyle(fontSize: 18),
+      body: ghosts.isEmpty
+          ? Center(
+              child: ElevatedButton(
+                onPressed: _startRaceWithoutGhost,
+                child: const Text('Correr sem fantasma'),
               ),
             )
           : ListView.builder(
-              itemCount: _ghosts.length,
-              padding: const EdgeInsets.all(16),
+              itemCount: ghosts.length,
               itemBuilder: (context, index) {
-                final ghost = _ghosts[index];
+                final ghost = ghosts[index];
                 return Card(
-                  elevation: 4,
-                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: ListTile(
-                    title: Text('Fantasma ${index + 1}'),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Text('Distância: ${(ghost.distance / 1000).toStringAsFixed(2)} km'),
-                        Text('Tempo: ${_formatDuration(Duration(seconds: ghost.elapsedSeconds))}'),
-                        Text('Pace: ${ghost.pace.toStringAsFixed(2)} min/km'),
-                      ],
+                    title: Text(
+                      'Fantasma ${index + 1} - ${(ghost.distance / 1000).toStringAsFixed(2)} km',
                     ),
-                    trailing: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => MapScreen(ghost: ghost),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF85324C),
-                      ),
-                      child: const Text('Competir'),
+                    subtitle: Text(
+                      'Tempo: ${ghost.elapsedSeconds}s • Pace: ${ghost.pace.toStringAsFixed(2)} min/km',
                     ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _deleteGhost(index),
+                    ),
+                    onTap: () => _startRaceWithGhost(ghost),
                   ),
                 );
               },
             ),
+      floatingActionButton: ElevatedButton(
+        onPressed: _startRaceWithoutGhost,
+        child: const Text('Correr sem fantasma'),
+      ),
     );
-  }
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return '${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds';
   }
 }

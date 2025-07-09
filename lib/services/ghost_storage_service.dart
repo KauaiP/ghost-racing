@@ -14,6 +14,16 @@ class GhostStorageService {
     await prefs.setStringList(_key, ghostList);
   }
 
+  Future<void> deleteGhostAt(int index) async {
+  final prefs = await SharedPreferences.getInstance();
+  final List<String> ghostList = prefs.getStringList('ghosts') ?? [];
+
+  if (index >= 0 && index < ghostList.length) {
+    ghostList.removeAt(index);
+    await prefs.setStringList('ghosts', ghostList);
+  }
+}
+
   Future<List<GhostData>> getAllGhosts() async {
     final prefs = await SharedPreferences.getInstance();
     final ghostList = prefs.getStringList(_key) ?? [];

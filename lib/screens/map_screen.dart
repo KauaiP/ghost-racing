@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/ghost_data.dart';
 import '../services/ghost_storage_service.dart';
 import '../services/mqtt_service.dart';
-import 'dart:convert';
+
+bool _userWon = false;
+bool _ghostWon = false;
+bool _victoryNotified = false;
 
 enum RaceState { running, paused, stopped }
 
@@ -28,11 +32,11 @@ class _MapScreenState extends State<MapScreen> {
   double _totalDistance = 0.0;
   StreamSubscription<Position>? _positionStream;
 
-  // MQTT
   MQTTService? _mqtt;
   String mqttTopic = "ghoststride/demo";
 
-  LatLng? ghostPosition;
+  double _userProgress = 0.0;
+  double _ghostProgress = 0.0;
 
   @override
   void initState() {
@@ -50,91 +54,133 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_startTime != null) {
-        setState(() {
-          _elapsedTime = DateTime.now().difference(_startTime!);
-        });
-        _updateGhostPosition();
-      }
+  _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    if (_startTime != null) {
+      setState(() {
+        _elapsedTime = DateTime.now().difference(_startTime!);
+      });
+      _updateGhostProgress();
+      _checkVictory();
+    }
+  });
+}
+
+void _checkVictory() {
+  if (_victoryNotified || widget.ghost == null) return;
+
+  final ghostTotalDistance = widget.ghost!.distance;
+  final ghostTotalTime = widget.ghost!.elapsedSeconds.toDouble();
+
+  final userDone = _totalDistance >= ghostTotalDistance;
+  final ghostDone = _elapsedTime.inSeconds >= ghostTotalTime;
+
+  if (userDone && !ghostDone) {
+    _victoryNotified = true;
+    _userWon = true;
+    _ghostWon = false;
+    _showVictorySnackBar("Você venceu o fantasma!");
+  } else if (ghostDone && !userDone) {
+    _victoryNotified = true;
+    _ghostWon = true;
+    _userWon = false;
+    _showVictorySnackBar("O fantasma venceu você!");
+  } else if (userDone && ghostDone) {
+    _victoryNotified = true;
+    final userTime = _elapsedTime.inSeconds;
+    final ghostTime = widget.ghost!.elapsedSeconds;
+
+    if (userTime < ghostTime) {
+      _userWon = true;
+      _ghostWon = false;
+      _showVictorySnackBar("Você venceu por tempo!");
+    } else if (userTime > ghostTime) {
+      _ghostWon = true;
+      _userWon = false;
+      _showVictorySnackBar("O fantasma venceu por tempo!");
+    } else {
+      _ghostWon = false;
+      _userWon = false;
+      _showVictorySnackBar("Empate!");
+    }
+  }
+}
+
+void _showVictorySnackBar(String message) {
+  if (!mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(message),
+      duration: const Duration(seconds: 4),
+      backgroundColor: Colors.indigo,
+    ),
+  );
+}
+
+
+  void _updateGhostProgress() {
+    if (widget.ghost == null) return;
+
+    final ghostTotalDistance = widget.ghost!.distance;
+    final ghostTotalTime = widget.ghost!.elapsedSeconds.toDouble();
+
+    setState(() {
+      _userProgress = (_totalDistance / ghostTotalDistance).clamp(0.0, 1.0);
+      _ghostProgress = (_elapsedTime.inSeconds / ghostTotalTime).clamp(0.0, 1.0);
     });
   }
 
-  void _updateGhostPosition() {
-    if (widget.ghost == null || _route.length < 2) return;
-
-    final double ghostSpeed = widget.ghost!.distance / widget.ghost!.elapsedSeconds;
-    final double ghostDistance = ghostSpeed * _elapsedTime.inSeconds;
-
-    double accumulated = 0.0;
-    for (int i = 0; i < _route.length - 1; i++) {
-      final double segment = Geolocator.distanceBetween(
-        _route[i].latitude,
-        _route[i].longitude,
-        _route[i + 1].latitude,
-        _route[i + 1].longitude,
-      );
-
-      if (accumulated + segment >= ghostDistance) {
-        final double ratio = (ghostDistance - accumulated) / segment;
-        final double lat = _route[i].latitude +
-            ( _route[i + 1].latitude - _route[i].latitude ) * ratio;
-        final double lng = _route[i].longitude +
-            ( _route[i + 1].longitude - _route[i].longitude ) * ratio;
-
-        setState(() {
-          ghostPosition = LatLng(lat, lng);
-        });
-        break;
-      }
-
-      accumulated += segment;
-    }
-  }
-
   void _handleIncomingMessage(String payload) {
-  final data = jsonDecode(payload); // ← transforma o JSON de volta em Map
-  final ghostDistance = double.tryParse(data['distance']);
-  final ghostTime = int.tryParse(data['time'].toString());
+    final data = jsonDecode(payload);
+    final ghostDistance = double.tryParse(data['distance']);
+    final ghostTime = int.tryParse(data['time'].toString());
 
-  print('Fantasma percorreu $ghostDistance metros em $ghostTime segundos');
+    print('Fantasma percorreu $ghostDistance metros em $ghostTime segundos');
   }
 
   void _stopRace() async {
-    _timer?.cancel();
-    _positionStream?.cancel();
-    setState(() => _raceState = RaceState.stopped);
+  _timer?.cancel();
+  _positionStream?.cancel();
+  setState(() => _raceState = RaceState.stopped);
 
-    final double finalDistance = _totalDistance;
-    final Duration finalElapsedTime = _elapsedTime;
-    final double finalPace =
-        finalDistance > 0
-            ? (finalElapsedTime.inSeconds / 60) / (finalDistance / 1000)
-            : 0.0;
+  final double finalDistance = _totalDistance;
+  final Duration finalElapsedTime = _elapsedTime;
+  final double finalPace = finalDistance > 0
+      ? (finalElapsedTime.inSeconds / 60) / (finalDistance / 1000)
+      : 0.0;
 
+  // Salva apenas se não havia fantasma (corrida normal)
+  if (widget.ghost == null) {
     final ghostStorage = GhostStorageService();
-    final ghosts = await ghostStorage.getAllGhosts();
-
-    if (ghosts.isEmpty) {
-      await ghostStorage.saveGhost(
-        GhostData(
-          distance: finalDistance,
-          elapsedSeconds: finalElapsedTime.inSeconds,
-          pace: finalPace,
-        ),
-      );
-    }
-
-    Navigator.pushNamed(
-      context,
-      '/historico',
-      arguments: {
-        'distance': finalDistance,
-        'elapsedTime': finalElapsedTime,
-        'pace': finalPace,
-      },
+    await ghostStorage.saveGhost(
+      GhostData(
+        distance: finalDistance,
+        elapsedSeconds: finalElapsedTime.inSeconds,
+        pace: finalPace,
+      ),
     );
   }
+
+  // Define o resultado da corrida
+  String? vencedor;
+  if (widget.ghost != null) {
+    final userWon = _totalDistance >= widget.ghost!.distance &&
+        _elapsedTime.inSeconds <= widget.ghost!.elapsedSeconds;
+    vencedor = userWon ? "Você venceu!" : "Fantasma venceu!";
+  }
+
+  Navigator.pushNamed(
+    context,
+    '/resultado_corrida', // ajuste de acordo com sua rota
+    arguments: {
+      'distance': finalDistance,
+      'elapsedTime': finalElapsedTime,
+      'pace': finalPace,
+      'vencedor': vencedor,
+      'ghost': widget.ghost,
+    },
+  );
+}
+
 
   void _pauseRace() {
     _timer?.cancel();
@@ -265,104 +311,105 @@ class _MapScreenState extends State<MapScreen> {
                         infoWindow: const InfoWindow(title: 'Você'),
                         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
                       ),
-                    if (ghostPosition != null)
-                      Marker(
-                        markerId: const MarkerId('ghost'),
-                        position: ghostPosition!,
-                        infoWindow: const InfoWindow(title: 'Fantasma'),
-                        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
-                      ),
                   },
                 ),
+
+                if (widget.ghost != null)
+                  Positioned(
+                    top: 20,
+                    left: 20,
+                    right: 20,
+                    child: Column(
+                      children: [
+                        const Text("Progresso da Corrida", style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 6),
+                        _buildProgressRow("Você", _userProgress, Colors.blue),
+                        const SizedBox(height: 4),
+                        _buildProgressRow("Fantasma", _ghostProgress, Colors.purple),
+                      ],
+                    ),
+                  ),
+
                 Positioned(
                   bottom: 20,
                   left: 20,
                   right: 20,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Distância total:',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '${_totalDistance.toStringAsFixed(2)} metros',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            color: Color(0xFF702C50),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Tempo total:',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '${_elapsedTime.inMinutes.toString().padLeft(2, '0')}:${(_elapsedTime.inSeconds % 60).toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            color: Color(0xFF702C50),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Pace:',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          _totalDistance > 0 && _elapsedTime.inSeconds > 0
-                              ? '${((_elapsedTime.inSeconds / 60) / (_totalDistance / 1000)).toStringAsFixed(2)} min/km'
-                              : 'N/A',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            color: Color(0xFF702C50),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            if (_raceState == RaceState.running)
-                              ElevatedButton(
-                                onPressed: _pauseRace,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
-                                ),
-                                child: const Text('Pausar'),
-                              ),
-                            if (_raceState == RaceState.paused)
-                              ElevatedButton(
-                                onPressed: _resumeRace,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                ),
-                                child: const Text('Retomar'),
-                              ),
-                            if (_raceState != RaceState.stopped)
-                              ElevatedButton(
-                                onPressed: _stopRace,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                ),
-                                child: const Text('Encerrar'),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  child: _buildStatsBox(),
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildProgressRow(String label, double progress, Color color) {
+    return Row(
+      children: [
+        SizedBox(width: 60, child: Text(label)),
+        Expanded(
+          child: LinearProgressIndicator(
+            value: progress,
+            backgroundColor: Colors.grey[300],
+            color: color,
+            minHeight: 10,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text("${(progress * 100).toStringAsFixed(0)}%"),
+      ],
+    );
+  }
+
+  Widget _buildStatsBox() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Distância total:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text('${_totalDistance.toStringAsFixed(2)} metros',
+              style: const TextStyle(fontSize: 20, color: Color(0xFF702C50), fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          const Text('Tempo total:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text('${_elapsedTime.inMinutes.toString().padLeft(2, '0')}:${(_elapsedTime.inSeconds % 60).toString().padLeft(2, '0')}',
+              style: const TextStyle(fontSize: 20, color: Color(0xFF702C50), fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          const Text('Pace:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(
+            _totalDistance > 0 && _elapsedTime.inSeconds > 0
+                ? '${((_elapsedTime.inSeconds / 60) / (_totalDistance / 1000)).toStringAsFixed(2)} min/km'
+                : 'N/A',
+            style: const TextStyle(fontSize: 20, color: Color(0xFF702C50), fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              if (_raceState == RaceState.running)
+                ElevatedButton(
+                  onPressed: _pauseRace,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                  child: const Text('Pausar'),
+                ),
+              if (_raceState == RaceState.paused)
+                ElevatedButton(
+                  onPressed: _resumeRace,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  child: const Text('Retomar'),
+                ),
+              if (_raceState != RaceState.stopped)
+                ElevatedButton(
+                  onPressed: _stopRace,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Encerrar'),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
